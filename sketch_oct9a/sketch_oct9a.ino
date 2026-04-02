@@ -1,32 +1,5 @@
 /*-------------------------------------------------------------------------------------------------------
-// Model Railroading with Arduino - NCE OLED Throttle Demo 
-//
-// Copyright (c) 2019 Alex Shepherd
-//
-// This source file is subject of the GNU general public license 2,
-// that is available at the world-wide-web at
-// http://www.gnu.org/licenses/gpl.txt
-//-------------------------------------------------------------------------------------------------------
-// file:      Throttle-OLED-SSD1306-M32U4.ino
-// author:    Alex Shepherd
-// webpage:   http://mrrwa.org/
-// history:   2019-04-28 Initial Version
-//-------------------------------------------------------------------------------------------------------
-// purpose:   Demonstrate how to use the NceCabBus library to build a NCE Throttle with OLED display
-//
-// additional hardware:
-//            - An RS485 Interface chip - there are many but the code assumes that the TX & RX Exnable pins
-//              are wired together and connected to the Arduino Output Pin defined by RS485_TX_ENABLE_PIN
-//            - A 128 x 32 pixel OLED Display connected via I2C using the SSD1306Ascii library
-//            - A 4x4 Keypad with the 4 columns and 4 rows wired to inputs define below
-//            - A 10k Rotary Potentiometer (POT) wired to Gnd, VCC and the ADC input define by SPEED_POT_ANALOG_INPUT
-//
-// required libraries:
-//            SSD1306Ascii library can be installed using the Arduino Library Manager
-//
-// notes:     This example was developed on an Arduino Pro Micro which has the AVR MEGA32U4 chip.
-//            It uses this native USB port for Serial Debug output which left the hardware UART 
-//            for RS485 comms.
+// Model Railroading with Arduino
 //-------------------------------------------------------------------------------------------------------*/
 
 #include <Keypad.h>
@@ -34,18 +7,19 @@
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
 #include <NceCabBus.h>
+#include <LiquidCrystal_I2C.h>
 
 // Change the line below to match the Serial port you're using for RS485 
-#define RS485Serial Serial1
+#define RS485Serial Serial
 
 // Change the line below to match the RS485 Chip TX Enable pin 
-#define RS485_TX_ENABLE_PIN 4
+#define RS485_TX_ENABLE_PIN 2
 
 // Change the line below to set the Throttle Cab Bus Address 
 #define CAB_BUS_ADDRESS     4
 
 // The #define below defines the ADC Input to use for the Speed POT 
-#define SPEED_POT_ANALOG_INPUT A5
+#define SPEED_POT_ANALOG_INPUT A4
 
 // The value below sets the number of ADC Samples to average to smooth the radings 
 #define ANALOG_AVG_NUM_SAMPLES 5
@@ -138,7 +112,7 @@ uint8_t mapKeysToNceButton(char keysCode, KeyState keyAction)
 
 // 0X3C+SA0 - 0x3C or 0x3D
 #define I2C_ADDRESS 0x3C
-SSD1306AsciiWire oled;
+SSD1306AsciiWire lcd;
 
 NceCabBus cabBus;
 
@@ -176,11 +150,11 @@ void updateLCDHandler(uint8_t Col, uint8_t Row, char *msg, uint8_t len)
   DebugMonSerial.print(Row);
   DebugMonSerial.print(" Msg: ");
 #endif
+  
 
-  oled.setCursor(Col * (oled.fontWidth() + oled.letterSpacing()) , Row);
   for(uint8_t i = 0; i < len; i++) 
   {
-    oled.print(msg[i]);
+    lcd.print(msg[i]);
 #ifdef DEBUG_LCD
     DebugMonSerial.print(msg[i]);
 #endif
@@ -197,7 +171,7 @@ bool cursorOn;
 
 void moveLCDCursorHandler(uint8_t Col, uint8_t Row)
 {
-  nextPrintCharCol = Col * (oled.fontWidth() + oled.letterSpacing());
+  nextPrintCharCol = Col * (lcd.fontWidth() + lcd.letterSpacing());
   nextPrintCharRow = Row;
 #ifdef DEBUG_LCD
   DebugMonSerial.print("\nMove Cursor: Col:");
@@ -205,7 +179,7 @@ void moveLCDCursorHandler(uint8_t Col, uint8_t Row)
   DebugMonSerial.print(" Row:");
   DebugMonSerial.println(Row);
 #endif
-  oled.setCursor(nextPrintCharCol, nextPrintCharRow);
+  lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
 }
 
 void cursorModeHandler(CURSOR_MODE mode)
@@ -219,31 +193,31 @@ void cursorModeHandler(CURSOR_MODE mode)
     case CURSOR_CLEAR_HOME:
       nextPrintCharCol = 0;
       nextPrintCharRow = 0;
-      oled.clear();
+      lcd.clear();
       break;
 
     case CURSOR_HOME:
       nextPrintCharCol = 0;
       nextPrintCharRow = 0;
-      oled.setCursor(nextPrintCharCol, nextPrintCharRow);
+      lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
       break;
 
     case CURSOR_OFF:
       cursorOn = false;
 
-      oled.setCursor(nextPrintCharCol, nextPrintCharRow);
-      oled.print(' ');
-      oled.setCursor(nextPrintCharCol, nextPrintCharRow);
+      lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
+      lcd.print(' ');
+      lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
       break;
       
     case CURSOR_ON:
       cursorOn = true;
 
-      oled.setCursor(nextPrintCharCol, nextPrintCharRow);
-      oled.setInvertMode(true);
-      oled.print(' ');
-      oled.setInvertMode(false);
-      oled.setCursor(nextPrintCharCol, nextPrintCharRow);
+      lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
+      lcd.setInvertMode(true);
+      lcd.print(' ');
+      lcd.setInvertMode(false);
+      lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
       break;
 
     case DISPLAY_SHIFT_RIGHT:
@@ -264,18 +238,18 @@ void printLCDCharHandler(char ch, bool advanceCursor)
   DebugMonSerial.println(advanceCursor);
 #endif
 
-  oled.setCursor(nextPrintCharCol, nextPrintCharRow);
-  oled.print(ch);
+  lcd.setCursor(nextPrintCharCol, nextPrintCharRow);
+  lcd.print(ch);
 
   if(advanceCursor)
-    nextPrintCharCol += (oled.fontWidth() + oled.letterSpacing());
+    nextPrintCharCol += (lcd.fontWidth() + lcd.letterSpacing());
 }
 
 
 void setup()
 {
   uint32_t startMillis = millis();
-  const char* splashMsg = "NCE OLED Throttle";
+  const char* splashMsg = "NCE lcd Throttle";
 
 #ifdef ENABLE_DEBUG_SERIAL
   DebugMonSerial.begin(115200);
@@ -286,24 +260,25 @@ void setup()
 #ifdef DEBUG_LIBRARY    
     cabBus.setLogger(&DebugMonSerial);
 #endif
+
     DebugMonSerial.println();
     DebugMonSerial.println(splashMsg);
   }
 #endif
-  
+  LiquidCrystal_I2C lcd(0x27,16,2);
   Wire.begin();
   Wire.setClock(400000L);
 
-  oled.begin(&Adafruit128x32, I2C_ADDRESS);
-  oled.setFont(lcd5x7);
-  oled.setCursor(0,0);
-  oled.print(splashMsg);
-  oled.setCursor(0,1);
-  oled.println("ABCDEFGHIJKLMOPQ");
-  oled.println("1234567890123456");
+  lcd.begin(&Adafruit128x32, I2C_ADDRESS);
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print(splashMsg);
+  lcd.setCursor(0,1);
+  lcd.println("ABCDEFGHIJKLMOPQ");
+  lcd.println("1234567890123456");
   
   delay(2000);
-  oled.clear();
+  lcd.clear();
 
   pinMode(RS485_TX_ENABLE_PIN, OUTPUT);
   digitalWrite(RS485_TX_ENABLE_PIN, LOW);
